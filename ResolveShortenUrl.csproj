@@ -43,9 +43,9 @@
     </Reference>
     <Reference Include="System.Data" />
     <Reference Include="System.Xml" />
-    <Reference Include="TwitterIrcGatewayCore-20090925-2.0.3555.19004, Version=2.0.3555.19004, Culture=neutral, processorArchitecture=MSIL">
+    <Reference Include="TwitterIrcGatewayCore, Version=2.0.3561.15216, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\TwitterIrcGatewayCore-20090925-2.0.3555.19004.dll</HintPath>
+      <HintPath>.\TwitterIrcGatewayCore.dll</HintPath>
     </Reference>
   </ItemGroup>
   <ItemGroup>

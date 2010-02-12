@@ -13,31 +13,46 @@ namespace Spica.Applications.TwitterIrcGateway.AddIns.ResolveShortenUrl
 {
 	public class ResolveShortenUrlPattern : IConfiguration
 	{
-		public Boolean Enable { get; set; }
+		public Boolean Enabled { get; set; }
 		public String Pattern { get; set; }
 
 		public ResolveShortenUrlPattern()
 		{
-			Enable = true;
+			Enabled = true;
 			Pattern = String.Empty;
 		}
 
 		public override string ToString()
 		{
-			return String.Format("Enable={0} Pattern={1}", Enable, Pattern);
+			return ToShortString();
+		}
+
+		public string ToShortString()
+		{
+			StringBuilder sb = new StringBuilder();
+			sb.AppendFormat("{0}", Pattern);
+			return sb.ToString();
+		}
+
+		public string ToLongString()
+		{
+			StringBuilder sb = new StringBuilder();
+			sb.AppendFormat("[{0}]", Enabled ? "*" : " ");
+			sb.AppendFormat(" {0}", Pattern);
+			return sb.ToString();
 		}
 	}
 
 	public class ResolveShortenUrlConfiguration : IConfiguration
 	{
 		[Browsable(false)]
-		public List<ResolveShortenUrlPattern> PatternList { get; set; }
+		public List<ResolveShortenUrlPattern> Items { get; set; }
 		public Boolean EnableResolveShortenUrl { get; set; }
 		public Int32 TimeOut { get; set; }
 
 		public ResolveShortenUrlConfiguration()
 		{
-			PatternList = new List<ResolveShortenUrlPattern>();
+			Items = new List<ResolveShortenUrlPattern>();
 			EnableResolveShortenUrl = true;
 			TimeOut = 1000;
 		}
@@ -61,16 +76,16 @@ namespace Spica.Applications.TwitterIrcGateway.AddIns.ResolveShortenUrl
 		[Description("存在するパターンをすべて表示します")]
 		public void List()
 		{
-			if (AddIn.Config.PatternList.Count == 0)
+			if (AddIn.Config.Items.Count == 0)
 			{
 				Console.NotifyMessage("パターンは現在設定されていません。");
 				return;
 			}
 
-			for (Int32 i = 0; i < AddIn.Config.PatternList.Count; ++i)
+			for (Int32 i = 0; i < AddIn.Config.Items.Count; ++i)
 			{
-				ResolveShortenUrlPattern pattern = AddIn.Config.PatternList[i];
-				Console.NotifyMessage(String.Format("{0}: {1}", i, pattern.ToString()));
+				ResolveShortenUrlPattern item = AddIn.Config.Items[i];
+				Console.NotifyMessage(String.Format("{0}: {1}", i, item.ToLongString()));
 			}
 		}
 
@@ -91,9 +106,9 @@ namespace Spica.Applications.TwitterIrcGateway.AddIns.ResolveShortenUrl
 		{
 			FindAt(arg, item =>
 			{
-				AddIn.Config.PatternList.Remove(item);
+				AddIn.Config.Items.Remove(item);
 				CurrentSession.AddInManager.SaveConfig(AddIn.Config);
-				Console.NotifyMessage(String.Format("パターン {0} を削除しました。", item.Pattern));
+				Console.NotifyMessage(String.Format("パターン {0} を削除しました。", item.ToShortString()));
 			});
 		}
 
@@ -104,7 +119,7 @@ namespace Spica.Applications.TwitterIrcGateway.AddIns.ResolveShortenUrl
 			{
 				Type type = typeof(EditResolveShortenUrlContext);
 				EditResolveShortenUrlContext ctx = Console.GetContext(type, CurrentServer, CurrentSession) as EditResolveShortenUrlContext;
-				ctx.SetDefaultPattern(item); // Console.GetContextじゃないとConsoleセットしてくれなくて (できなくて) エラーはいちゃう対策
+				ctx.SetDefaultPattern(item);
 				Console.PushContext(ctx);
 			});
 		}
@@ -117,30 +132,35 @@ namespace Spica.Applications.TwitterIrcGateway.AddIns.ResolveShortenUrl
 			Console.PushContext(ctx);
 		}
 
-		#region Private
 		private void SwitchEnable(String arg, Boolean enable)
 		{
 			FindAt(arg, item =>
 			{
-				item.Enable = enable;
+				item.Enabled = enable;
 				CurrentSession.AddInManager.SaveConfig(AddIn.Config);
-				Console.NotifyMessage(String.Format("パターン {0} を{1}化しました。", item.Pattern, (enable ? "有効" : "無効")));
+				Console.NotifyMessage(String.Format("パターン {0} を{1}化しました。", item.ToShortString(), (enable ? "有効" : "無効")));
 			});
 		}
 
 		private void FindAt(String arg, Action<ResolveShortenUrlPattern> action)
 		{
-			try
+			Int32 index;
+			if (Int32.TryParse(arg, out index))
 			{
-				var pattern = AddIn.Config.PatternList[Int32.Parse(arg)];
-				action(pattern);
+				if (index < AddIn.Config.Items.Count && index > -1)
+				{
+					action(AddIn.Config.Items[index]);
+				}
+				else
+				{
+					Console.NotifyMessage("存在しないパターンが指定されました。");
+				}
 			}
-			catch (Exception)
+			else
 			{
 				Console.NotifyMessage("パターンの指定が正しくありません。");
 			}
 		}
-		#endregion
 	}
 
 	public class EditResolveShortenUrlContext : Context
@@ -159,7 +179,7 @@ namespace Spica.Applications.TwitterIrcGateway.AddIns.ResolveShortenUrl
 			Pattern = new ResolveShortenUrlPattern();
 		}
 
-		public void SetDefaultPattern(ResolveShortenUrlPattern pattern)
+		internal void SetDefaultPattern(ResolveShortenUrlPattern pattern)
 		{
 			IsNewRecord = false;
 			Pattern = pattern;
@@ -168,7 +188,7 @@ namespace Spica.Applications.TwitterIrcGateway.AddIns.ResolveShortenUrl
 		[Description("パターンを保存してコンテキストを終了します")]
 		public void Save()
 		{
-			if (IsNewRecord) AddIn.Config.PatternList.Add(Pattern);
+			if (IsNewRecord) AddIn.Config.Items.Add(Pattern);
 			CurrentSession.AddInManager.SaveConfig(AddIn.Config);
 			Console.NotifyMessage(String.Format("パターンを{0}しました。", (IsNewRecord ? "新規作成" : "保存")));
 			Exit();
@@ -193,11 +213,12 @@ namespace Spica.Applications.TwitterIrcGateway.AddIns.ResolveShortenUrl
 
 		private String Resolve(String text)
 		{
-			foreach (ResolveShortenUrlPattern pattern in Config.PatternList)
+			foreach (ResolveShortenUrlPattern item in Config.Items)
 			{
-				if (pattern.Enable)
+				if (item.Enabled)
 				{
-					text = Regex.Replace(text, pattern.Pattern, (Match m) => Resolve(m.Value, Config.TimeOut), RegexOptions.IgnoreCase);
+					RegexOptions opt = RegexOptions.IgnoreCase | RegexOptions.Compiled;
+					text = Regex.Replace(text, item.Pattern, (Match m) => Resolve(m.Value, Config.TimeOut), opt);
 				}
 			}
 
